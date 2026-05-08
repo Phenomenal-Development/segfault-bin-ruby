@@ -60,6 +60,13 @@ module SegfaultBin
     def install!
       return unless defined?(Rails) && Rails.respond_to?(:error)
       Rails.error.subscribe(Subscriber.new(self))
+      config.logger.info("[SegfaultBin] subscribed to Rails.error (env=#{config.environment}, dsn_host=#{safe_dsn_host})")
+    end
+
+    def safe_dsn_host
+      config.endpoint.host
+    rescue
+      "<unparseable>"
     end
   end
 end
