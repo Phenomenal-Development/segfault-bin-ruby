@@ -87,8 +87,7 @@ module SegfaultBin
         data[:ip_address] ||= ActionDispatch::Request.new(env).remote_ip
       end
 
-      result = data.slice(:id, :email, :username, :ip_address).compact
-      result.empty? ? nil : result
+      data.slice(:id, :email, :username, :ip_address).compact
     end
 
     def build_tags

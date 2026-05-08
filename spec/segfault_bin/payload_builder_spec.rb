@@ -115,7 +115,7 @@ RSpec.describe SegfaultBin::PayloadBuilder do
 
       config.send_default_pii = false
       payload = described_class.new(exception, {}, config).build
-      expect(payload[:user]).to be_nil
+      expect(payload[:user]).to eq({})
 
       config.send_default_pii = true
       payload = described_class.new(exception, {}, config).build
