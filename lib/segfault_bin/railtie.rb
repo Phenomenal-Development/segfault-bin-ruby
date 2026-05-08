@@ -10,9 +10,15 @@ module SegfaultBin
     end
 
     config.after_initialize do
-      if SegfaultBin.config.dsn.to_s.empty? &&
-          SegfaultBin.config.enabled_environments.include?(Rails.env)
+      cfg = SegfaultBin.config
+      if cfg.dsn.to_s.empty? && cfg.enabled_environments.include?(Rails.env)
         Rails.logger&.warn("[SegfaultBin] DSN not configured, error reporting disabled")
+      elsif !cfg.dsn.to_s.empty? && !cfg.enabled_environments.include?(cfg.environment)
+        Rails.logger&.warn(
+          "[SegfaultBin] DSN is set but environment #{cfg.environment.inspect} is not in " \
+          "enabled_environments #{cfg.enabled_environments.inspect}; error reporting disabled. " \
+          "Add #{cfg.environment.inspect} to config.enabled_environments to enable."
+        )
       end
     end
   end
