@@ -37,12 +37,6 @@ module SegfaultBin
       !dsn.to_s.empty? && enabled_environments.include?(environment)
     end
 
-    def validate!
-      if dsn.to_s.empty? && enabled_environments.include?(environment)
-        raise ArgumentError, "SegfaultBin.config.dsn must be set"
-      end
-    end
-
     def endpoint
       URI.parse(dsn)
     end

@@ -22,18 +22,6 @@ RSpec.describe SegfaultBin::Configuration do
     end
   end
 
-  describe "#validate!" do
-    it "raises when dsn missing in enabled environment" do
-      config.environment = "production"
-      expect { config.validate! }.to raise_error(ArgumentError, /dsn must be set/)
-    end
-
-    it "does not raise when dsn missing in disabled environment" do
-      config.environment = "development"
-      expect { config.validate! }.not_to raise_error
-    end
-  end
-
   describe "#auth_token" do
     it "extracts the userinfo token from the DSN" do
       config.dsn = "https://abc123@bin.example.com/api/events"

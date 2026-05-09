@@ -24,7 +24,6 @@ module SegfaultBin
   class << self
     def configure
       yield(config)
-      config.validate!
       install! if config.enabled?
     end
 
