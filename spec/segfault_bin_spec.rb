@@ -2,6 +2,7 @@
 
 require "rack"
 require "json"
+require "active_support/gzip"
 
 RSpec.describe SegfaultBin do
   it "has a version number" do
@@ -74,7 +75,8 @@ RSpec.describe SegfaultBin do
       configure!(detect: true)
       stub = stub_request(:post, "https://bin.example.com/api/events")
         .with { |req|
-          body = JSON.parse(req.body)
+          raw = req.headers["Content-Encoding"] == "gzip" ? ActiveSupport::Gzip.decompress(req.body) : req.body
+          body = JSON.parse(raw)
           body["type"] == "n_plus_one_query" &&
             body["groups"].is_a?(Array) &&
             body["groups"].first["count"] >= 3

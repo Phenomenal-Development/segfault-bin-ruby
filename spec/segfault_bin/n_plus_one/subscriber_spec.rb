@@ -35,10 +35,15 @@ RSpec.describe SegfaultBin::NPlusOne::Subscriber do
     expect(tracker.triggered_groups).to be_empty
   end
 
-  it "drops events when call site cannot be resolved" do
+  it "drops events when call site cannot be resolved but still records preceding context" do
     allow(resolver).to receive(:resolve).and_return(nil)
-    handle({sql: "SELECT 1"})
+    handle({sql: "SELECT * FROM customers ORDER BY last_name"})
     expect(tracker.triggered_groups).to be_empty
+    # Now that a real call site resolves, the next burst should pick up the prior SQL as preceding.
+    allow(resolver).to receive(:resolve).and_return(call_site)
+    3.times { handle({sql: "SELECT COUNT(*) FROM orders WHERE customer_id = 1"}) }
+    g = tracker.triggered_groups.first
+    expect(g.preceding_query.fingerprint).to include("customers")
   end
 
   it "records and triggers at threshold" do

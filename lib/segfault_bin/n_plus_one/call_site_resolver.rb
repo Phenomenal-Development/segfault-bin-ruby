@@ -3,7 +3,6 @@
 module SegfaultBin
   module NPlusOne
     class CallSiteResolver
-      MAX_FRAMES = 30
       START_FRAME = 2
 
       def initialize(config)
@@ -14,7 +13,9 @@ module SegfaultBin
       end
 
       def resolve
-        locations = caller_locations(START_FRAME, MAX_FRAMES) || []
+        # No frame cap: from inside a sql.active_record subscriber the user-code
+        # frame can be 40+ deep once Rails view rendering is on the stack.
+        locations = caller_locations(START_FRAME) || []
         locations.each do |loc|
           abs_path = loc.absolute_path || loc.path
           next unless abs_path

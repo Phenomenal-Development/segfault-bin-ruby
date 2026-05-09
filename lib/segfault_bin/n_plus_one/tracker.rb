@@ -5,12 +5,17 @@ module SegfaultBin
     class Tracker
       Group = Struct.new(
         :fingerprint, :call_site, :count, :total_duration_ms,
-        :sample_sql, :first_seen_at, :last_seen_at, :triggered,
+        :sample_sql, :samples, :first_seen_at, :last_seen_at, :triggered,
+        :preceding_query,
         keyword_init: true
       )
 
+      Sample = Struct.new(:sql, :duration_ms, keyword_init: true)
+      Preceding = Struct.new(:fingerprint, :sql, :duration_ms, keyword_init: true)
+
       DEFAULT_THRESHOLD = 5
       DEFAULT_MAX_GROUPS = 1000
+      MAX_SAMPLES_PER_GROUP = 5
 
       def initialize(threshold: DEFAULT_THRESHOLD, max_groups: DEFAULT_MAX_GROUPS, clock: Time)
         @threshold = threshold
@@ -19,15 +24,25 @@ module SegfaultBin
         @groups = {}
         @triggered = []
         @full = false
+        @last_query = nil
+      end
+
+      def note_query(fingerprint:, sql:, duration_ms:)
+        @last_query = Preceding.new(fingerprint: fingerprint, sql: sql, duration_ms: duration_ms)
+        nil
       end
 
       def record(fingerprint:, sql:, duration_ms:, call_site:)
         key = [fingerprint, call_site]
         group = @groups[key]
         if group.nil?
-          return if @full
+          if @full
+            note_query(fingerprint: fingerprint, sql: sql, duration_ms: duration_ms)
+            return
+          end
           if @groups.size >= @max_groups
             @full = true
+            note_query(fingerprint: fingerprint, sql: sql, duration_ms: duration_ms)
             return
           end
           now = @clock.now
@@ -37,19 +52,25 @@ module SegfaultBin
             count: 0,
             total_duration_ms: 0.0,
             sample_sql: sql,
+            samples: [],
             first_seen_at: now,
             last_seen_at: now,
-            triggered: false
+            triggered: false,
+            preceding_query: @last_query
           )
           @groups[key] = group
         end
         group.count += 1
         group.total_duration_ms += duration_ms
         group.last_seen_at = @clock.now
+        if group.samples.size < MAX_SAMPLES_PER_GROUP
+          group.samples << Sample.new(sql: sql, duration_ms: duration_ms)
+        end
         if !group.triggered && group.count >= @threshold
           group.triggered = true
           @triggered << key
         end
+        note_query(fingerprint: fingerprint, sql: sql, duration_ms: duration_ms)
         nil
       end
 

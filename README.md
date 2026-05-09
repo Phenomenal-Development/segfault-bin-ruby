@@ -103,10 +103,17 @@ the same group repeats `n_plus_one_threshold` times within one request,
 an `n_plus_one_query` event is emitted to the collector.
 
 The detection adds minimal overhead per query: cached and schema queries
-are skipped immediately, group state is bounded by `n_plus_one_max_groups`,
-and `caller_locations` is bounded to 30 frames. The fingerprint is always
-sent; the raw `sample_sql` is only included when `send_default_pii = true`,
-since literal values may contain PII.
+are skipped immediately, and group state is bounded by
+`n_plus_one_max_groups`. The fingerprint is always sent; the raw
+`sample_sql`, the per-group `samples` (up to 5), and the `preceding_span`'s
+literal SQL are only included when `send_default_pii = true`, since literal
+values may contain PII.
+
+Each event also carries the parent SELECT that immediately preceded the
+burst (`groups[].preceding_span`), the matching controller action
+(`transaction`, `groups[].parent_span`), the Rails `request_id`, and a
+`contexts` map (`runtime`, `os`, plus `browser`/`client_os`/`device` parsed
+from the User-Agent when present).
 
 Known v1 limitations:
 

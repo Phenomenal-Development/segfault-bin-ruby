@@ -13,6 +13,21 @@ RSpec.describe SegfaultBin::NPlusOnePayloadBuilder do
 
   let(:call_site) { {abs_path: "/app/c.rb", filename: "c.rb", lineno: 42, function: "show", in_app: true} }
 
+  let(:preceding) do
+    SegfaultBin::NPlusOne::Tracker::Preceding.new(
+      fingerprint: "select * from users",
+      sql: "SELECT * FROM users",
+      duration_ms: 5.1
+    )
+  end
+
+  let(:samples) do
+    [
+      SegfaultBin::NPlusOne::Tracker::Sample.new(sql: "SELECT * FROM posts WHERE user_id = 7", duration_ms: 1.2),
+      SegfaultBin::NPlusOne::Tracker::Sample.new(sql: "SELECT * FROM posts WHERE user_id = 8", duration_ms: 1.4)
+    ]
+  end
+
   let(:group) do
     SegfaultBin::NPlusOne::Tracker::Group.new(
       fingerprint: "select * from posts where user_id = ?",
@@ -20,9 +35,11 @@ RSpec.describe SegfaultBin::NPlusOnePayloadBuilder do
       count: 17,
       total_duration_ms: 184.6,
       sample_sql: "SELECT * FROM posts WHERE user_id = 7",
+      samples: samples,
       first_seen_at: Time.utc(2026, 5, 9, 12, 0, 0),
       last_seen_at: Time.utc(2026, 5, 9, 12, 0, 1),
-      triggered: true
+      triggered: true,
+      preceding_query: preceding
     )
   end
 
@@ -71,6 +88,54 @@ RSpec.describe SegfaultBin::NPlusOnePayloadBuilder do
       SegfaultBin::CurrentRequest.env = env
       expect(payload[:request][:method]).to eq "GET"
       expect(payload[:request][:headers]).to include("User-Agent" => "rspec")
+    end
+
+    it "carries the transaction name when path_parameters resolved a controller/action" do
+      env = Rack::MockRequest.env_for("/manage/customers")
+      env["action_dispatch.request.path_parameters"] = {controller: "manage/customers", action: "index"}
+      SegfaultBin::CurrentRequest.env = env
+      expect(payload[:transaction]).to eq "Manage::CustomersController#index"
+      expect(payload[:groups].first[:parent_span]).to eq(
+        "view.process_action.action_controller - Manage::CustomersController#index"
+      )
+    end
+
+    it "exposes runtime, os, and contexts" do
+      expect(payload[:runtime][:name]).to eq "ruby"
+      expect(payload[:runtime][:version]).to eq RUBY_VERSION
+      expect(payload[:contexts][:runtime][:name]).to eq "ruby"
+      expect(payload[:contexts][:os]).to be_a(Hash)
+      expect(payload[:contexts][:os][:name]).not_to be_nil
+    end
+
+    it "parses browser/client_os/device from User-Agent" do
+      env = Rack::MockRequest.env_for("/", "HTTP_USER_AGENT" =>
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.4 Safari/605.1.15")
+      SegfaultBin::CurrentRequest.env = env
+      expect(payload[:contexts][:browser]).to eq(name: "Safari", version: "26.4")
+      expect(payload[:contexts][:client_os][:name]).to eq "Mac OS X"
+      expect(payload[:contexts][:device][:family]).to eq "Mac"
+    end
+
+    it "exposes request_id from action_dispatch" do
+      env = Rack::MockRequest.env_for("/")
+      env["action_dispatch.request_id"] = "8f88b760-d2d7-4a13-ad07-a6635cff9be3"
+      SegfaultBin::CurrentRequest.env = env
+      expect(payload[:request_id]).to eq "8f88b760-d2d7-4a13-ad07-a6635cff9be3"
+    end
+
+    it "includes preceding_span without sql by default" do
+      preceding_in_payload = payload[:groups].first[:preceding_span]
+      expect(preceding_in_payload[:fingerprint]).to eq "select * from users"
+      expect(preceding_in_payload).not_to have_key(:sql)
+    end
+
+    it "exposes preceding_span sql and samples when send_default_pii is true" do
+      config.send_default_pii = true
+      g = payload[:groups].first
+      expect(g[:preceding_span][:sql]).to eq "SELECT * FROM users"
+      expect(g[:samples].size).to eq 2
+      expect(g[:samples].first[:sql]).to include("user_id = 7")
     end
   end
 end

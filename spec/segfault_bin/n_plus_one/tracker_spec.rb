@@ -41,4 +41,34 @@ RSpec.describe SegfaultBin::NPlusOne::Tracker do
     tracker.record(fingerprint: "select", sql: "SELECT 2", duration_ms: 1.0, call_site: call_site_a)
     expect(tracker.triggered_groups.first.sample_sql).to eq "SELECT 1"
   end
+
+  it "captures the preceding query as the parent of a group" do
+    tracker = described_class.new(threshold: 2)
+    tracker.note_query(fingerprint: "select * from customers", sql: "SELECT * FROM customers ORDER BY last_name", duration_ms: 4.2)
+    2.times { tracker.record(fingerprint: "count(*) orders", sql: "SELECT COUNT(*) FROM orders", duration_ms: 0.5, call_site: call_site_a) }
+    g = tracker.triggered_groups.first
+    expect(g.preceding_query).not_to be_nil
+    expect(g.preceding_query.fingerprint).to eq "select * from customers"
+    expect(g.preceding_query.sql).to include("ORDER BY")
+  end
+
+  it "accumulates samples up to the cap" do
+    tracker = described_class.new(threshold: 2)
+    8.times do |i|
+      tracker.record(fingerprint: "f", sql: "SELECT #{i}", duration_ms: 1.0, call_site: call_site_a)
+    end
+    samples = tracker.triggered_groups.first.samples
+    expect(samples.size).to eq SegfaultBin::NPlusOne::Tracker::MAX_SAMPLES_PER_GROUP
+    expect(samples.first.sql).to eq "SELECT 0"
+  end
+
+  it "still tracks the last query when the group cap is hit" do
+    tracker = described_class.new(threshold: 1, max_groups: 1)
+    tracker.record(fingerprint: "a", sql: "A", duration_ms: 1.0, call_site: call_site_a)
+    tracker.record(fingerprint: "b", sql: "B", duration_ms: 1.0, call_site: call_site_a)
+    expect(tracker.full?).to be true
+    # next group records its preceding from this point — record won't add the group
+    tracker.note_query(fingerprint: "c", sql: "C", duration_ms: 1.0)
+    expect { tracker.record(fingerprint: "d", sql: "D", duration_ms: 1.0, call_site: call_site_a) }.not_to raise_error
+  end
 end

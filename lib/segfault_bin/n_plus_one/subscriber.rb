@@ -37,14 +37,16 @@ module SegfaultBin
           return if name == "SCHEMA"
           tracker = SegfaultBin::CurrentRequest.n_plus_one_tracker
           return unless tracker
-          return if tracker.full?
           sql = payload[:sql]
           return unless sql
           duration_ms = (finish - start) * 1000.0
           return if duration_ms < min_duration_ms
           fp = Fingerprinter.fingerprint(sql)
           call_site = resolver.resolve
-          return unless call_site
+          if call_site.nil? || tracker.full?
+            tracker.note_query(fingerprint: fp, sql: sql, duration_ms: duration_ms)
+            return
+          end
           tracker.record(fingerprint: fp, sql: sql, duration_ms: duration_ms, call_site: call_site)
         end
       end
