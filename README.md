@@ -12,17 +12,24 @@ request context, and ships them to a Segfault Bin collector.
 gem "segfault_bin"
 ```
 
+Then generate the initializer:
+
+```sh
+bin/rails g segfault_bin:install
+```
+
+This creates `config/initializers/segfault_bin.rb` with sensible defaults:
+
 ```ruby
-# config/initializers/segfault_bin.rb
 SegfaultBin.configure do |c|
   c.dsn                  = ENV["SEGFAULT_BIN_DSN"]
   c.environment          = Rails.env
-  c.release              = ENV["RELEASE_SHA"]
+  c.release              = ENV["RELEASE_SHA"] || ENV["HEROKU_SLUG_COMMIT"]
   c.enabled_environments = %w[production staging]
 end
 ```
 
-The DSN format: `https://<token>@host/api/events`.
+Set `SEGFAULT_BIN_DSN` in your environment. The DSN format: `https://<token>@host/api/events`.
 
 ## Usage
 
