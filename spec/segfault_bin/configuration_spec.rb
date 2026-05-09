@@ -53,5 +53,21 @@ RSpec.describe SegfaultBin::Configuration do
     it "enables production and staging by default" do
       expect(config.enabled_environments).to contain_exactly("production", "staging")
     end
+
+    it "disables N+1 detection by default" do
+      expect(config.detect_n_plus_one).to be false
+    end
+
+    it "uses N+1 threshold of 5 by default" do
+      expect(config.n_plus_one_threshold).to eq 5
+    end
+
+    it "uses N+1 max_groups of 1000 by default" do
+      expect(config.n_plus_one_max_groups).to eq 1000
+    end
+
+    it "uses N+1 min_duration_ms of 0.0 by default" do
+      expect(config.n_plus_one_min_duration_ms).to eq 0.0
+    end
   end
 end

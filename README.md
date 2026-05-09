@@ -87,8 +87,33 @@ warning is logged — the request thread is never blocked.
 | `include_request_body` | `true` | |
 | `include_frame_vars` | `false` | Reserved for future use |
 | `app_dirs_pattern` | `Rails.root` | Path prefix used to mark frames as `in_app` |
-| `send_default_pii` | `false` | When true, attaches `request.remote_ip` to the user payload |
+| `send_default_pii` | `false` | When true, attaches `request.remote_ip` to the user payload, and includes `sample_sql` in N+1 events |
 | `async` | `true` | When true, delivery runs on a background worker thread (see Production setup) |
+| `detect_n_plus_one` | `false` | Opt-in N+1 SQL query detection (HTTP requests only) |
+| `n_plus_one_threshold` | `5` | Occurrences of the same query group needed to fire an event |
+| `n_plus_one_min_duration_ms` | `0.0` | Minimum query duration to count |
+| `n_plus_one_max_groups` | `1000` | Per-request memory cap on tracked groups |
+
+## N+1 query detection
+
+When `detect_n_plus_one = true`, SegfaultBin subscribes to the
+`sql.active_record` notification and tracks queries per HTTP request,
+grouping by normalized SQL fingerprint and the first in-app caller. When
+the same group repeats `n_plus_one_threshold` times within one request,
+an `n_plus_one_query` event is emitted to the collector.
+
+The detection adds minimal overhead per query: cached and schema queries
+are skipped immediately, group state is bounded by `n_plus_one_max_groups`,
+and `caller_locations` is bounded to 30 frames. The fingerprint is always
+sent; the raw `sample_sql` is only included when `send_default_pii = true`,
+since literal values may contain PII.
+
+Known v1 limitations:
+
+- HTTP requests only — ActiveJob is not yet covered.
+- Background threads spawned mid-request will not be tracked
+  (`CurrentAttributes` is per-thread).
+- N+1 events share the `max_events_per_minute` budget with exception events.
 
 ## Development
 

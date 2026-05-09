@@ -11,4 +11,10 @@ SegfaultBin.configure do |c|
   # c.include_request_body    = true
   # c.send_default_pii        = false
   # c.async                   = true
+
+  # N+1 query detection (HTTP requests only)
+  # c.detect_n_plus_one          = false
+  # c.n_plus_one_threshold       = 5
+  # c.n_plus_one_min_duration_ms = 0.0
+  # c.n_plus_one_max_groups      = 1000
 end
