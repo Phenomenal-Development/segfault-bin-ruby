@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+- Application log capture and shipping. Opt-in via `config.send_logs = true`;
+  the gem attaches itself to `Rails.logger` via `ActiveSupport::BroadcastLogger`
+  (Rails 7.1+) and ships log entries to `POST /api/logs` in batches.
+- New config options: `send_logs`, `log_min_level` (default `:info`),
+  `log_endpoint_path` (default `/api/logs`), `log_batch_size` (50),
+  `log_flush_interval` (2.0s), `log_max_buffer` (1000), `log_source` (`"rails"`).
+- Server-authoritative disable: when the server returns 204 (project has
+  `logs_enabled=false`), the batcher backs off for 60 seconds.
+- `SegfaultBin.flush_logs` for graceful shutdown in tests and scripts.
+
 ## [0.2.0] - 2026-05-09
 
 - N+1 detection: remove the 30-frame cap on call-site resolution. With Rails view

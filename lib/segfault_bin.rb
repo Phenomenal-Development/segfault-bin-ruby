@@ -16,6 +16,8 @@ require "segfault_bin/transport"
 require "segfault_bin/rate_limiter"
 require "segfault_bin/subscriber"
 require "segfault_bin/middleware/capture_request"
+require "segfault_bin/log_capture/sink"
+require "segfault_bin/log_capture/batcher"
 require "segfault_bin/railtie" if defined?(Rails::Railtie)
 
 module SegfaultBin
@@ -58,12 +60,31 @@ module SegfaultBin
       @rate_limiter ||= RateLimiter.new(config.max_events_per_minute)
     end
 
+    def log_batcher
+      return nil unless config.logs_enabled?
+      @log_batcher ||= LogCapture::Batcher.new(config).tap(&:start)
+    end
+
+    def log_sink
+      return nil unless config.logs_enabled?
+      batcher = log_batcher
+      return nil unless batcher
+      @log_sink ||= LogCapture::Sink.new(config, batcher: batcher)
+    end
+
+    def flush_logs(timeout: 2.0)
+      @log_batcher&.flush(timeout: timeout)
+    end
+
     def reset!
       NPlusOne::Subscriber.detach!
       @transport.shutdown if @transport.respond_to?(:shutdown)
+      @log_batcher&.shutdown
       @config = nil
       @transport = nil
       @rate_limiter = nil
+      @log_batcher = nil
+      @log_sink = nil
     end
 
     def reset_transport!
@@ -81,6 +102,10 @@ module SegfaultBin
       if config.detect_n_plus_one
         NPlusOne::Subscriber.attach!(config)
         config.logger.info("[SegfaultBin] N+1 detection enabled (threshold=#{config.n_plus_one_threshold})")
+      end
+      if config.logs_enabled?
+        log_batcher # starts the worker
+        config.logger.info("[SegfaultBin] log shipping enabled (min_level=#{config.log_min_level}, batch=#{config.log_batch_size})")
       end
     end
 

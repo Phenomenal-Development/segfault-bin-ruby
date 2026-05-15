@@ -122,6 +122,47 @@ Known v1 limitations:
   (`CurrentAttributes` is per-thread).
 - N+1 events share the `max_events_per_minute` budget with exception events.
 
+## Capturing application logs
+
+SegfaultBin can also ship application logs (anything written to `Rails.logger`)
+to the collector, alongside exceptions and N+1 events. Logs are captured by
+attaching to `Rails.logger` via `ActiveSupport::BroadcastLogger` (requires Rails 7.1+),
+batched in a background thread, and POSTed to `/api/logs`.
+
+Enable it in your initializer:
+
+```ruby
+SegfaultBin.configure do |c|
+  c.dsn       = ENV["SEGFAULT_BIN_DSN"]
+  c.send_logs = true
+  c.log_min_level = :info   # :debug, :info, :warn, :error, :fatal
+end
+```
+
+The collector also has a per-project toggle — when the project's "logs enabled"
+setting is off, the server returns 204 and the gem backs off for 60 seconds
+before trying again, so it's safe to leave `send_logs = true` in the gem and
+control rollout from the collector.
+
+### Log config options
+
+| Option | Default | Notes |
+|---|---|---|
+| `send_logs` | `false` | Master switch on the gem side |
+| `log_min_level` | `:info` | Minimum severity to ship (`:debug` / `:info` / `:warn` / `:error` / `:fatal`) |
+| `log_endpoint_path` | `"/api/logs"` | Path used relative to the DSN host |
+| `log_batch_size` | `50` | Flush threshold |
+| `log_flush_interval` | `2.0` | Seconds — flush even when below batch size |
+| `log_max_buffer` | `1000` | Buffer cap; oldest entries are dropped on overflow |
+| `log_source` | `"rails"` | String tag attached to each entry (`source` column on the collector) |
+
+Each log entry carries the configured `environment`, `release`, `server_name`,
+the current `request_id` (from `action_dispatch.request_id` or `X-Request-Id`),
+and a free-form `source` tag.
+
+Use `SegfaultBin.flush_logs` to drain the buffer in tests or just before a
+graceful shutdown.
+
 ## Development
 
 ```sh
