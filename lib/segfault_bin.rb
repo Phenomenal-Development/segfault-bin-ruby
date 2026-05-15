@@ -105,8 +105,28 @@ module SegfaultBin
       end
       if config.logs_enabled?
         log_batcher # starts the worker
+        attach_log_sink!
         config.logger.info("[SegfaultBin] log shipping enabled (min_level=#{config.log_min_level}, batch=#{config.log_batch_size})")
       end
+    end
+
+    def attach_log_sink!
+      return unless defined?(Rails) && Rails.respond_to?(:logger)
+      unless defined?(ActiveSupport::BroadcastLogger)
+        config.logger&.warn("[SegfaultBin] ActiveSupport::BroadcastLogger not available; log capture disabled (requires Rails 7.1+)")
+        return
+      end
+
+      sink_inst = log_sink
+      return unless sink_inst
+
+      if Rails.logger.is_a?(ActiveSupport::BroadcastLogger)
+        return if Rails.logger.broadcasts.include?(sink_inst)
+        Rails.logger.broadcast_to(sink_inst)
+      else
+        Rails.logger = ActiveSupport::BroadcastLogger.new(Rails.logger, sink_inst)
+      end
+      config.logger&.info("[SegfaultBin] log capture attached to Rails.logger (broadcasts=#{Rails.logger.broadcasts.size})")
     end
 
     def safe_dsn_host

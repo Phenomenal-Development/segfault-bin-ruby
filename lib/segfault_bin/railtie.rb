@@ -9,25 +9,13 @@ module SegfaultBin
       app.middleware.use SegfaultBin::Middleware::CaptureRequest
     end
 
-    initializer "segfault_bin.log_capture", after: :initialize_logger do |_app|
+    # Fallback wiring: if the user's SegfaultBin.configure call ran before
+    # Rails.logger existed (rare), or if their initializer order swapped the
+    # logger after configure, re-attach the sink once Rails has fully booted.
+    # The primary attach happens inside SegfaultBin.install!.
+    config.after_initialize do
       cfg = SegfaultBin.config
-      next unless cfg.logs_enabled?
-
-      sink = SegfaultBin.log_sink
-      next unless sink
-
-      if defined?(ActiveSupport::BroadcastLogger)
-        if Rails.logger.is_a?(ActiveSupport::BroadcastLogger)
-          unless Rails.logger.broadcasts.include?(sink)
-            Rails.logger.broadcast_to(sink)
-          end
-        else
-          Rails.logger = ActiveSupport::BroadcastLogger.new(Rails.logger, sink)
-        end
-        cfg.logger&.info("[SegfaultBin] log capture attached to Rails.logger (min_level=#{cfg.log_min_level})")
-      else
-        cfg.logger&.warn("[SegfaultBin] ActiveSupport::BroadcastLogger not available; log capture disabled (requires Rails 7.1+)")
-      end
+      SegfaultBin.attach_log_sink! if cfg.logs_enabled?
     end
 
     config.after_initialize do
