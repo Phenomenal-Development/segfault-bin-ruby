@@ -15,6 +15,8 @@ module SegfaultBin
       :send_default_pii,
       :detect_n_plus_one, :n_plus_one_threshold,
       :n_plus_one_min_duration_ms, :n_plus_one_max_groups,
+      :detect_slow_queries, :slow_query_min_duration_ms,
+      :slow_query_min_allocations, :slow_query_max_groups,
       :send_logs, :log_endpoint_path,
       :log_batch_size, :log_flush_interval, :log_max_buffer,
       :log_source
@@ -34,6 +36,10 @@ module SegfaultBin
       @n_plus_one_threshold = 5
       @n_plus_one_min_duration_ms = 0.0
       @n_plus_one_max_groups = 1000
+      @detect_slow_queries = false
+      @slow_query_min_duration_ms = 100.0
+      @slow_query_min_allocations = 10_000
+      @slow_query_max_groups = 200
       @environment = ENV["RAILS_ENV"] || "development"
       @release = ENV["RELEASE_SHA"] || ENV["HEROKU_SLUG_COMMIT"]
       @server_name = ENV["DYNO"] || Socket.gethostname
@@ -71,6 +77,37 @@ module SegfaultBin
 
     def auth_token
       endpoint.user || endpoint.path.split("/").last
+    end
+
+    # Safe-to-expose snapshot of the gem's runtime configuration. Embedded in
+    # each event envelope under `sdk[:config]` so the collector can show users
+    # what their app is currently reporting with. Excludes `dsn` and the raw
+    # filter key list (potentially sensitive).
+    def snapshot
+      {
+        enabled: enabled?,
+        enabled_environments: enabled_environments,
+        async: async,
+        send_default_pii: send_default_pii,
+        include_request_body: include_request_body,
+        include_frame_vars: include_frame_vars,
+        max_events_per_minute: max_events_per_minute,
+        additional_filter_key_count: additional_filter_keys.length,
+        detect_n_plus_one: detect_n_plus_one,
+        n_plus_one_threshold: n_plus_one_threshold,
+        n_plus_one_min_duration_ms: n_plus_one_min_duration_ms,
+        n_plus_one_max_groups: n_plus_one_max_groups,
+        detect_slow_queries: detect_slow_queries,
+        slow_query_min_duration_ms: slow_query_min_duration_ms,
+        slow_query_min_allocations: slow_query_min_allocations,
+        slow_query_max_groups: slow_query_max_groups,
+        send_logs: send_logs,
+        log_min_level: log_min_level,
+        log_batch_size: log_batch_size,
+        log_flush_interval: log_flush_interval,
+        log_max_buffer: log_max_buffer,
+        log_source: log_source
+      }
     end
   end
 end

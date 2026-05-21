@@ -29,7 +29,8 @@ RSpec.describe SegfaultBin::PayloadBuilder do
         :event_id, :timestamp, :platform, :sdk, :exception, :tags
       )
       expect(payload[:platform]).to eq "ruby"
-      expect(payload[:sdk]).to eq(name: "segfault-bin-ruby", version: SegfaultBin::VERSION)
+      expect(payload[:sdk]).to include(name: "segfault-bin-ruby", version: SegfaultBin::VERSION)
+      expect(payload[:sdk][:config]).to be_a(Hash)
       expect(payload[:level]).to eq "error"
       expect(payload[:environment]).to eq "production"
       expect(payload[:release]).to eq "abc123"

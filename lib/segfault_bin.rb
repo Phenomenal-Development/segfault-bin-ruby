@@ -12,6 +12,9 @@ require "segfault_bin/n_plus_one/call_site_resolver"
 require "segfault_bin/n_plus_one/tracker"
 require "segfault_bin/n_plus_one/subscriber"
 require "segfault_bin/n_plus_one_payload_builder"
+require "segfault_bin/slow_query/tracker"
+require "segfault_bin/slow_query/subscriber"
+require "segfault_bin/slow_query_payload_builder"
 require "segfault_bin/transport"
 require "segfault_bin/rate_limiter"
 require "segfault_bin/subscriber"
@@ -56,6 +59,16 @@ module SegfaultBin
       config.logger.error("[SegfaultBin] failed to report n+1: #{e.class} #{e.message}")
     end
 
+    def report_slow_queries(groups, truncated:)
+      return unless config.enabled?
+      return if groups.nil? || groups.empty?
+      return if rate_limiter.throttled?
+      payload = SlowQueryPayloadBuilder.new(groups, truncated, config).build
+      transport.deliver(payload)
+    rescue => e
+      config.logger.error("[SegfaultBin] failed to report slow queries: #{e.class} #{e.message}")
+    end
+
     def rate_limiter
       @rate_limiter ||= RateLimiter.new(config.max_events_per_minute)
     end
@@ -78,6 +91,7 @@ module SegfaultBin
 
     def reset!
       NPlusOne::Subscriber.detach!
+      SlowQuery::Subscriber.detach!
       @transport.shutdown if @transport.respond_to?(:shutdown)
       @log_batcher&.shutdown
       @config = nil
@@ -121,6 +135,10 @@ module SegfaultBin
       if config.detect_n_plus_one
         NPlusOne::Subscriber.attach!(config)
         config.logger.info("[SegfaultBin] N+1 detection enabled (threshold=#{config.n_plus_one_threshold})")
+      end
+      if config.detect_slow_queries
+        SlowQuery::Subscriber.attach!(config)
+        config.logger.info("[SegfaultBin] slow query detection enabled (min_ms=#{config.slow_query_min_duration_ms}, min_alloc=#{config.slow_query_min_allocations})")
       end
       if config.logs_enabled?
         log_batcher # starts the worker

@@ -57,5 +57,47 @@ RSpec.describe SegfaultBin::Configuration do
     it "uses N+1 min_duration_ms of 0.0 by default" do
       expect(config.n_plus_one_min_duration_ms).to eq 0.0
     end
+
+    it "disables slow query detection by default" do
+      expect(config.detect_slow_queries).to be false
+    end
+
+    it "uses slow_query_min_duration_ms of 100ms by default" do
+      expect(config.slow_query_min_duration_ms).to eq 100.0
+    end
+
+    it "uses slow_query_min_allocations of 10_000 by default" do
+      expect(config.slow_query_min_allocations).to eq 10_000
+    end
+
+    it "uses slow_query_max_groups of 200 by default" do
+      expect(config.slow_query_max_groups).to eq 200
+    end
+  end
+
+  describe "#snapshot" do
+    it "exposes feature flags and thresholds for the collector" do
+      snap = config.snapshot
+      expect(snap).to include(
+        :detect_n_plus_one,
+        :n_plus_one_threshold,
+        :detect_slow_queries,
+        :slow_query_min_duration_ms,
+        :slow_query_min_allocations,
+        :send_default_pii,
+        :send_logs,
+        :log_min_level
+      )
+    end
+
+    it "never includes the dsn or raw filter keys" do
+      config.dsn = "https://secrettoken@bin.example.com/api/events"
+      config.additional_filter_keys = %w[ssn ccnumber]
+      snap = config.snapshot
+      expect(snap.values).not_to include("secrettoken", "ssn", "ccnumber")
+      expect(snap[:additional_filter_key_count]).to eq 2
+      expect(snap).not_to have_key(:dsn)
+      expect(snap).not_to have_key(:additional_filter_keys)
+    end
   end
 end

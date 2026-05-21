@@ -53,7 +53,8 @@ RSpec.describe SegfaultBin::NPlusOnePayloadBuilder do
 
     it "includes envelope fields" do
       expect(payload).to include(:event_id, :timestamp, :sdk, :environment, :release, :server_name)
-      expect(payload[:sdk]).to eq(name: "segfault-bin-ruby", version: SegfaultBin::VERSION)
+      expect(payload[:sdk]).to include(name: "segfault-bin-ruby", version: SegfaultBin::VERSION)
+      expect(payload[:sdk][:config]).to be_a(Hash)
     end
 
     it "tags the source as n_plus_one" do

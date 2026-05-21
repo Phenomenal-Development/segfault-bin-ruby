@@ -87,12 +87,16 @@ warning is logged — the request thread is never blocked.
 | `include_request_body` | `true` | |
 | `include_frame_vars` | `false` | Reserved for future use |
 | `app_dirs_pattern` | `Rails.root` | Path prefix used to mark frames as `in_app` |
-| `send_default_pii` | `false` | When true, attaches `request.remote_ip` to the user payload, and includes `sample_sql` in N+1 events |
+| `send_default_pii` | `false` | When true, attaches `request.remote_ip` to the user payload, and includes `sample_sql` in N+1 and slow-query events |
 | `async` | `true` | When true, delivery runs on a background worker thread (see Production setup) |
 | `detect_n_plus_one` | `false` | Opt-in N+1 SQL query detection (HTTP requests only) |
 | `n_plus_one_threshold` | `5` | Occurrences of the same query group needed to fire an event |
 | `n_plus_one_min_duration_ms` | `0.0` | Minimum query duration to count |
 | `n_plus_one_max_groups` | `1000` | Per-request memory cap on tracked groups |
+| `detect_slow_queries` | `false` | Opt-in slow / high-allocation SQL query detection (HTTP requests only) |
+| `slow_query_min_duration_ms` | `100.0` | Wall-clock threshold (ms) above which a query is recorded |
+| `slow_query_min_allocations` | `10_000` | Ruby object-allocation delta above which a query is recorded |
+| `slow_query_max_groups` | `200` | Per-request cap on tracked groups (dedupe by `[fingerprint, call_site]`) |
 
 ## N+1 query detection
 
@@ -121,6 +125,31 @@ Known v1 limitations:
 - Background threads spawned mid-request will not be tracked
   (`CurrentAttributes` is per-thread).
 - N+1 events share the `max_events_per_minute` budget with exception events.
+
+## Slow query detection
+
+When `detect_slow_queries = true`, SegfaultBin subscribes to the
+`sql.active_record` notification and retains any query whose wall-clock
+duration ≥ `slow_query_min_duration_ms` **or** whose object-allocation
+delta (`Notifications::Event#allocations`) ≥ `slow_query_min_allocations`.
+Retained queries are grouped per request by `[fingerprint, call_site]`
+and emitted as a `slow_query` event at request end.
+
+Each group carries a `kinds` array (`"slow_duration"`, `"high_allocations"`,
+or both), per-group `count`, `max_duration_ms`, `total_duration_ms`,
+`max_allocations`, and `total_allocations`. As with N+1, the `sample_sql`
+and the per-group `samples` are only shipped when `send_default_pii = true`.
+
+Tuning notes:
+
+- Allocations are a proxy for ActiveRecord materialization cost: wide
+  result sets / large `.to_a` loads. `10_000` allocations roughly
+  corresponds to materializing 250–500 wide rows.
+- The fast path is O(1) per query — cached and schema queries short-circuit
+  immediately, and fingerprinting / `caller_locations` only run for queries
+  that already breached a threshold.
+- A request that emits both N+1 and slow_query events counts as two
+  payloads against `max_events_per_minute`.
 
 ## Capturing application logs
 

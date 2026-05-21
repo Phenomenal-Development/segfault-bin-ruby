@@ -6,7 +6,7 @@ require "active_support/current_attributes"
 
 module SegfaultBin
   class CurrentRequest < ActiveSupport::CurrentAttributes
-    attribute :env, :user, :n_plus_one_tracker, :transaction
+    attribute :env, :user, :n_plus_one_tracker, :slow_query_tracker, :transaction
 
     def self.set_user(user_data)
       return unless user_data.is_a?(Hash)

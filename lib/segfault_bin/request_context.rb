@@ -29,7 +29,7 @@ module SegfaultBin
         timestamp: Time.now.utc.iso8601(3),
         level: level,
         platform: "ruby",
-        sdk: {name: "segfault-bin-ruby", version: VERSION},
+        sdk: {name: "segfault-bin-ruby", version: VERSION, config: config.snapshot},
         environment: config.environment,
         release: config.release,
         server_name: config.server_name,
