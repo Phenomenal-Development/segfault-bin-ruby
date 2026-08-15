@@ -2,6 +2,7 @@
 
 require "rack"
 require "json"
+require "action_controller"
 require "active_support/gzip"
 
 RSpec.describe SegfaultBin do
@@ -40,6 +41,24 @@ RSpec.describe SegfaultBin do
       stub = stub_request(:post, /bin.example.com/)
       SegfaultBin.report(StandardError.new("x"))
       expect(stub).not_to have_been_requested
+    end
+
+    it "drops an excluded exception without delivering" do
+      stub = stub_request(:post, /bin.example.com/)
+      SegfaultBin.report(ActionController::RoutingError.new("no route matches"))
+      expect(stub).not_to have_been_requested
+    end
+
+    it "does not spend rate-limit budget on an excluded exception" do
+      expect(SegfaultBin.rate_limiter).not_to receive(:throttled?)
+      SegfaultBin.report(ActionController::RoutingError.new("no route matches"))
+    end
+
+    it "delivers an excluded exception once it is removed from the list" do
+      SegfaultBin.config.excluded_exceptions -= ["ActionController::RoutingError"]
+      stub = stub_request(:post, "https://bin.example.com/api/events").to_return(status: 200, body: "")
+      SegfaultBin.report(ActionController::RoutingError.new("no route matches"))
+      expect(stub).to have_been_requested
     end
   end
 

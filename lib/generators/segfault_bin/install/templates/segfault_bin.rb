@@ -8,6 +8,24 @@ SegfaultBin.configure do |c|
 
   # c.max_events_per_minute   = 100
   # c.additional_filter_keys  = []
+
+  # Client-triggered 4xx exceptions are ignored by default: RecordNotFound,
+  # RoutingError, InvalidAuthenticityToken, ParameterMissing and friends. The
+  # full list is SegfaultBin::Configuration::DEFAULT_EXCLUDED_EXCEPTIONS.
+  #
+  # Append your own with `+=` rather than assigning, so you keep the defaults.
+  # Subclasses of anything listed are ignored too:
+  # c.excluded_exceptions += %w[Billing::CardDeclined Api::InvalidSignature]
+  #
+  # Start reporting one of the defaults again:
+  # c.excluded_exceptions -= %w[ActiveRecord::RecordNotFound]
+  #
+  # Report everything, no exclusions at all:
+  # c.excluded_exceptions = []
+  #
+  # Names are strings on purpose — referencing your own error classes as
+  # constants here would autoload app code during initialization.
+
   # c.include_request_body    = true
   # c.send_default_pii        = false
   # c.async                   = true

@@ -42,6 +42,9 @@ module SegfaultBin
 
     def report(exception, context: {})
       return unless config.enabled?
+      # Checked before the rate limiter so ignored noise never eats budget
+      # that a real error would otherwise have spent.
+      return if config.excluded_exception?(exception)
       return if rate_limiter.throttled?
       payload = PayloadBuilder.new(exception, context, config).build
       transport.deliver(payload)

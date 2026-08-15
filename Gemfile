@@ -4,6 +4,7 @@ source "https://rubygems.org"
 
 gemspec
 
+gem "benchmark" # no longer a default gem as of Ruby 4.0; used by the transport specs
 gem "irb"
 gem "rake", "~> 13.0"
 

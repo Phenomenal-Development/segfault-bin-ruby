@@ -83,6 +83,7 @@ warning is logged — the request thread is never blocked.
 | `dsn` | — | Required in enabled environments |
 | `enabled_environments` | `%w[production staging]` | |
 | `max_events_per_minute` | `100` | Per-process sliding window |
+| `excluded_exceptions` | see below | Exception names that are never reported |
 | `additional_filter_keys` | `[]` | Merged with `Rails.application.config.filter_parameters` |
 | `include_request_body` | `true` | |
 | `include_frame_vars` | `false` | Reserved for future use |
@@ -97,6 +98,69 @@ warning is logged — the request thread is never blocked.
 | `slow_query_min_duration_ms` | `100.0` | Wall-clock threshold (ms) above which a query is recorded |
 | `slow_query_min_allocations` | `10_000` | Ruby object-allocation delta above which a query is recorded |
 | `slow_query_max_groups` | `200` | Per-request cap on tracked groups (dedupe by `[fingerprint, call_site]`) |
+
+## Ignored exceptions
+
+Some exceptions are client-triggered 4xx responses — Rails working as designed,
+not server-side defects anyone can fix. `Product.find(params[:id])` raising
+`ActiveRecord::RecordNotFound` is the intended control flow for "this URL points
+at a record that doesn't exist": stale links from search engines, bots probing
+sequential IDs, a bookmark for a since-deleted record, someone tampering with the
+ID in the URL. The trigger is external input, not your code.
+`ActionController::InvalidAuthenticityToken` is ignored for a slightly different
+reason: when it fires, it usually means CSRF protection is *working*.
+
+Reporting these would just bury real errors, so `excluded_exceptions` skips them
+by default. Anything not on this list is reported as usual:
+
+```
+AbstractController::ActionNotFound            ActionDispatch::Http::MimeNegotiation::InvalidType
+ActionController::BadRequest                  ActionDispatch::Http::Parameters::ParseError
+ActionController::InvalidAuthenticityToken    ActiveRecord::RecordNotFound
+ActionController::InvalidCrossOriginRequest   Mongoid::Errors::DocumentNotFound
+ActionController::MethodNotAllowed            Puma::HttpParserError
+ActionController::NotImplemented              Puma::HttpParserError501
+ActionController::ParameterMissing            Puma::MiniSSL::SSLError
+ActionController::RoutingError                Rack::QueryParser::InvalidParameterError
+ActionController::TooManyRequests             Rack::QueryParser::ParameterTypeError
+ActionController::UnknownAction               Sinatra::NotFound
+ActionController::UnknownFormat
+ActionController::UnknownHttpMethod
+```
+
+Entries are matched by name against the exception's whole ancestor chain, so a
+subclass of a listed exception is ignored too. A name whose constant isn't
+loaded in your app never matches, so the list is safe to carry as-is — for
+example `ActionController::TooManyRequests` (the exception behind Rails' built-in
+`rate_limit`) only takes effect on Rails 8.1.1+.
+
+Add your own error classes with `+=`, so you keep the defaults:
+
+```ruby
+c.excluded_exceptions += %w[Billing::CardDeclined Api::InvalidSignature]
+```
+
+Use strings rather than the constants themselves. Both work, but naming your own
+error classes as constants in `config/initializers` autoloads app code during
+initialization, which Rails discourages.
+
+To report one of the defaults again, subtract it:
+
+```ruby
+c.excluded_exceptions -= %w[ActiveRecord::RecordNotFound]
+```
+
+To turn the feature off and report everything:
+
+```ruby
+c.excluded_exceptions = []
+```
+
+The check runs before the rate limiter, so ignored exceptions never consume
+`max_events_per_minute` budget that a real error would have spent. It applies to
+manual `SegfaultBin.report` calls as well as automatic capture. The effective
+list is included in each event's `sdk[:config]` snapshot, so the collector can
+show you what a project is currently ignoring.
 
 ## N+1 query detection
 

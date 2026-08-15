@@ -8,8 +8,43 @@ module SegfaultBin
   class Configuration
     LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3, fatal: 4, unknown: 5 }.freeze
 
+    # Exceptions that are client-triggered 4xx responses: the framework working
+    # as designed, not server-side defects anyone can fix. The trigger is
+    # external input — stale links, bots probing sequential IDs, tampered URLs,
+    # a CSRF check doing its job — so reporting them only buries real errors.
+    #
+    # Mirrors sentry-ruby's IGNORE_DEFAULT + PUMA_IGNORE_DEFAULT, sentry-rails'
+    # IGNORE_DEFAULT, and RAILS_8_1_1_IGNORE_DEFAULT. Kept verbatim so the list
+    # is auditable against Sentry's; entries whose constant is not defined in a
+    # given app (Mongoid, Sinatra, Rails < 8.1.1) simply never match.
+    DEFAULT_EXCLUDED_EXCEPTIONS = %w[
+      AbstractController::ActionNotFound
+      ActionController::BadRequest
+      ActionController::InvalidAuthenticityToken
+      ActionController::InvalidCrossOriginRequest
+      ActionController::MethodNotAllowed
+      ActionController::NotImplemented
+      ActionController::ParameterMissing
+      ActionController::RoutingError
+      ActionController::TooManyRequests
+      ActionController::UnknownAction
+      ActionController::UnknownFormat
+      ActionController::UnknownHttpMethod
+      ActionDispatch::Http::MimeNegotiation::InvalidType
+      ActionDispatch::Http::Parameters::ParseError
+      ActiveRecord::RecordNotFound
+      Mongoid::Errors::DocumentNotFound
+      Puma::HttpParserError
+      Puma::HttpParserError501
+      Puma::MiniSSL::SSLError
+      Rack::QueryParser::InvalidParameterError
+      Rack::QueryParser::ParameterTypeError
+      Sinatra::NotFound
+    ].freeze
+
     attr_accessor :dsn, :environment, :release, :server_name,
       :enabled_environments, :max_events_per_minute,
+      :excluded_exceptions,
       :additional_filter_keys, :include_request_body,
       :include_frame_vars, :app_dirs_pattern, :logger, :async,
       :send_default_pii,
@@ -26,6 +61,7 @@ module SegfaultBin
     def initialize
       @enabled_environments = %w[production staging]
       @max_events_per_minute = 100
+      @excluded_exceptions = DEFAULT_EXCLUDED_EXCEPTIONS.dup
       @additional_filter_keys = []
       @include_request_body = true
       @include_frame_vars = false
@@ -67,6 +103,20 @@ module SegfaultBin
       !dsn.to_s.empty? && enabled_environments.include?(environment)
     end
 
+    # Entries may be Strings or Class/Module objects; both normalize to a name.
+    def excluded_exception_names
+      Array(excluded_exceptions).map { |e| e.is_a?(Module) ? e.name : e.to_s }.compact
+    end
+
+    # Matched against the whole ancestor chain by name rather than by constant,
+    # so a subclass of an ignored exception is ignored too and a name that is
+    # not loaded in this app never raises.
+    def excluded_exception?(exception)
+      names = excluded_exception_names
+      return false if names.empty?
+      exception.class.ancestors.any? { |ancestor| names.include?(ancestor.name) }
+    end
+
     def logs_enabled?
       enabled? && @send_logs
     end
@@ -92,6 +142,7 @@ module SegfaultBin
         include_request_body: include_request_body,
         include_frame_vars: include_frame_vars,
         max_events_per_minute: max_events_per_minute,
+        excluded_exceptions: excluded_exception_names,
         additional_filter_key_count: additional_filter_keys.length,
         detect_n_plus_one: detect_n_plus_one,
         n_plus_one_threshold: n_plus_one_threshold,

@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+- Ignore client-triggered 4xx exceptions by default. New `excluded_exceptions`
+  config, pre-populated with the Rails/Rack/Puma/Mongoid exceptions that
+  represent the framework working as designed (`ActiveRecord::RecordNotFound`,
+  `ActionController::RoutingError`, `ActionController::InvalidAuthenticityToken`,
+  `ActionController::TooManyRequests`, ...) rather than a server-side defect.
+  Matching walks the exception's ancestor chain by name, so subclasses are
+  covered and names that aren't loaded in the host app never match. The check
+  runs ahead of the rate limiter, so ignored noise no longer eats
+  `max_events_per_minute` budget. Append with `c.excluded_exceptions += [...]`
+  to keep the defaults.
+- Add `benchmark` as a development dependency — it stopped being a default gem
+  in Ruby 4.0, which broke `bundle exec rspec` on that version.
 - Application log capture and shipping. Opt-in via `config.send_logs = true`;
   the gem attaches itself to `Rails.logger` via `ActiveSupport::BroadcastLogger`
   (Rails 7.1+) and ships log entries to `POST /api/logs` in batches.

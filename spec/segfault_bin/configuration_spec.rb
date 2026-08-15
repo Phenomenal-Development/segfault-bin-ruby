@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "action_controller"
+
 RSpec.describe SegfaultBin::Configuration do
   subject(:config) { described_class.new }
 
@@ -72,6 +74,62 @@ RSpec.describe SegfaultBin::Configuration do
 
     it "uses slow_query_max_groups of 200 by default" do
       expect(config.slow_query_max_groups).to eq 200
+    end
+
+    it "excludes the client-triggered 4xx exceptions by default" do
+      expect(config.excluded_exceptions).to include(
+        "ActiveRecord::RecordNotFound",
+        "ActionController::InvalidAuthenticityToken",
+        "ActionController::RoutingError",
+        "ActionController::TooManyRequests",
+        "Rack::QueryParser::ParameterTypeError",
+        "Puma::HttpParserError"
+      )
+    end
+
+    it "does not share the default list between instances" do
+      config.excluded_exceptions << "MyApp::Whatever"
+      expect(described_class::DEFAULT_EXCLUDED_EXCEPTIONS).not_to include("MyApp::Whatever")
+      expect(described_class.new.excluded_exceptions).not_to include("MyApp::Whatever")
+    end
+  end
+
+  describe "#excluded_exception?" do
+    it "matches an exception listed by name" do
+      expect(config.excluded_exception?(ActionController::RoutingError.new("no route"))).to be true
+    end
+
+    it "matches a subclass of a listed exception" do
+      subclass = Class.new(ActionController::RoutingError)
+      expect(config.excluded_exception?(subclass.new("no route"))).to be true
+    end
+
+    it "does not match an unlisted exception" do
+      expect(config.excluded_exception?(StandardError.new("boom"))).to be false
+    end
+
+    it "ignores names whose constant is not loaded in this app" do
+      config.excluded_exceptions = ["Mongoid::Errors::DocumentNotFound"]
+      expect(defined?(Mongoid)).to be_nil
+      expect(config.excluded_exception?(StandardError.new("boom"))).to be false
+    end
+
+    it "accepts Class entries alongside String ones" do
+      config.excluded_exceptions = [ArgumentError, "TypeError"]
+      expect(config.excluded_exception?(ArgumentError.new)).to be true
+      expect(config.excluded_exception?(TypeError.new)).to be true
+      expect(config.excluded_exception?(StandardError.new)).to be false
+    end
+
+    it "matches nothing when the list is emptied" do
+      config.excluded_exceptions = []
+      expect(config.excluded_exception?(ActionController::RoutingError.new("no route"))).to be false
+    end
+
+    it "handles an anonymous exception class without matching on its nil name" do
+      anon = Class.new(RuntimeError)
+      expect(anon.name).to be_nil
+      expect(config.excluded_exception?(anon.new)).to be false
     end
   end
 
