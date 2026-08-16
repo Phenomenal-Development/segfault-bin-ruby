@@ -1,5 +1,25 @@
 ## [Unreleased]
 
+- Every message says which gem sent it, not just events. Error, N+1 and
+  slow-query payloads already carried `sdk.version` in the envelope; log
+  batches carried nothing but the batch, and log shipping is often the only
+  thing a healthy app ever sends. Batches now carry the same
+  `sdk: {name, version}` block, and both transports set an
+  `X-Segfault-Bin-Version` header — a header survives a request whose body the
+  collector never reads (turned away, disabled, oversized), which is how a
+  project that is misconfigured can still be told it is running an old gem.
+  The collector records the version off any of the three and shows projects
+  that are behind the current release.
+- Query fingerprints keep their table and column names. `Fingerprinter` treated
+  `"users"."id"` as a string literal and scrubbed it, so every Postgres query
+  collapsed to the same unreadable shape — `select ?.* from ? where ?.? = $?` —
+  which is neither identifiable in a slow-query list nor distinguishing enough
+  to group by. Double-quoted (Postgres) and backtick-quoted (MySQL) identifiers
+  now lose only their quotes: `select users.* from users where users.id = ?`.
+  Numbered bind placeholders (`$1`) collapse to `?` instead of `$?`.
+  Affects both slow-query and N+1 fingerprints. Existing groups on the server
+  re-key themselves at the first event after the upgrade, so a signature's
+  history restarts once.
 - Ignore client-triggered 4xx exceptions by default. New `excluded_exceptions`
   config, pre-populated with the Rails/Rack/Puma/Mongoid exceptions that
   represent the framework working as designed (`ActiveRecord::RecordNotFound`,

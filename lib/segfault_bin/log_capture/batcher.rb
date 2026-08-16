@@ -110,7 +110,10 @@ module SegfaultBin
         return if batch.empty?
         return if disabled?
 
-        body = JSON.generate(logs: batch)
+        # A log batch has no event envelope, so it names the gem itself: the
+        # collector records the version off any message a project sends, and
+        # log shipping is often the only thing a healthy app ever sends.
+        body = JSON.generate(sdk: {name: "segfault-bin-ruby", version: VERSION}, logs: batch)
         gzipped = body.bytesize > GZIP_THRESHOLD
         body = ActiveSupport::Gzip.compress(body) if gzipped
 
@@ -120,6 +123,7 @@ module SegfaultBin
           req["Content-Type"] = "application/json"
           req["Content-Encoding"] = "gzip" if gzipped
           req["User-Agent"] = "segfault-bin-ruby/#{VERSION}"
+          req["X-Segfault-Bin-Version"] = VERSION
           req["X-Segfault-Bin-Protocol"] = "1"
           req.body = body
           http.request(req)

@@ -26,6 +26,11 @@ module SegfaultBin
           req["Content-Type"] = "application/json"
           req["Content-Encoding"] = "gzip" if gzipped
           req["User-Agent"] = "segfault-bin-ruby/#{VERSION}"
+          # Also in the envelope under sdk.version — but a header survives a
+          # request whose body the collector never reads (rejected, gzipped,
+          # oversized), which is how a badly configured project can still be
+          # told it is running an old gem.
+          req["X-Segfault-Bin-Version"] = VERSION
           req["X-Segfault-Bin-Protocol"] = "1"
           req.body = body
           http.request(req)

@@ -256,6 +256,23 @@ and a free-form `source` tag.
 Use `SegfaultBin.flush_logs` to drain the buffer in tests or just before a
 graceful shutdown.
 
+## Reporting the gem version
+
+Every message says which gem sent it, so the collector can tell you when a
+project is running an old one. Nothing to configure:
+
+- events (exceptions, N+1, slow queries) carry it in the envelope, as
+  `sdk: {name, version, config}`;
+- log batches carry the same `sdk: {name, version}` block alongside `logs`;
+- every request sets `X-Segfault-Bin-Version` and a
+  `User-Agent: segfault-bin-ruby/<version>` — a header still arrives when the
+  body doesn't, which is how a project whose payloads are being turned away can
+  still be told it's behind.
+
+The collector records the version off whichever of those it sees and flags
+projects behind its known release; it never sends anything back, so an old gem
+keeps working exactly as before.
+
 ## Development
 
 ```sh

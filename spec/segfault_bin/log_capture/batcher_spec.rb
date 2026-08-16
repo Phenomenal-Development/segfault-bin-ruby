@@ -48,6 +48,20 @@ RSpec.describe SegfaultBin::LogCapture::Batcher do
     expect(stub).to have_been_requested.at_least_once
   end
 
+  it "names the gem in the batch body and in a header" do
+    stub = stub_request(:post, "https://bin.example.com/api/logs")
+      .with(headers: {"X-Segfault-Bin-Version" => SegfaultBin::VERSION}) { |req|
+        body = JSON.parse(req.body)
+        body["sdk"] == {"name" => "segfault-bin-ruby", "version" => SegfaultBin::VERSION} &&
+          body["logs"].length == 2
+      }
+      .to_return(status: 202)
+    batcher.start
+    batcher.enqueue(entry("a"))
+    batcher.enqueue(entry("b"))
+    expect(wait_for_request(stub)).to be true
+  end
+
   it "sends gzip-encoded body when over threshold" do
     stub = stub_request(:post, "https://bin.example.com/api/logs")
              .with(headers: { "Content-Encoding" => "gzip" })

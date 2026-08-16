@@ -14,6 +14,7 @@ RSpec.describe SegfaultBin::Transport::SyncHttp do
           "Authorization" => "Bearer abc123",
           "Content-Type" => "application/json",
           "X-Segfault-Bin-Protocol" => "1",
+          "X-Segfault-Bin-Version" => SegfaultBin::VERSION,
           "User-Agent" => "segfault-bin-ruby/#{SegfaultBin::VERSION}"
         }
       )
